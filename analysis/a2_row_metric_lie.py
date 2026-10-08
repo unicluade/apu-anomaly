@@ -3,6 +3,7 @@
 PR-AUC 0.7745 와 0.0718. 10.8배 차이다. 결론이 날 것 같다.
 그런데 그 숫자를 만든 평가 표본은 고장 사건 2건이다.
 """
+
 import json
 import sys
 from pathlib import Path
@@ -25,27 +26,34 @@ def main():
     rows = []
     for i, n in enumerate(names):
         s = np.load(f"data/processed/score_{i}.npy")
-        rows.append({"모델": n, "ROC-AUC": roc_auc_score(y, s),
-                     "PR-AUC": average_precision_score(y, s)})
+        rows.append(
+            {
+                "모델": n,
+                "ROC-AUC": roc_auc_score(y, s),
+                "PR-AUC": average_precision_score(y, s),
+            }
+        )
     r = pd.DataFrame(rows)
     print("\n" + r.round(4).to_string(index=False))
     best = r.loc[r["PR-AUC"].idxmax()]
     worst = r.loc[r["PR-AUC"].idxmin()]
     print(f"""
-  1등 {best['모델']}  PR-AUC {best['PR-AUC']:.4f}
-  꼴등 {worst['모델']}  PR-AUC {worst['PR-AUC']:.4f}
-  → {best['PR-AUC']/worst['PR-AUC']:.1f}배 차이. 지도학습의 압승으로 보인다.""")
+  1등 {best["모델"]}  PR-AUC {best["PR-AUC"]:.4f}
+  꼴등 {worst["모델"]}  PR-AUC {worst["PR-AUC"]:.4f}
+  → {best["PR-AUC"] / worst["PR-AUC"]:.1f}배 차이. 지도학습의 압승으로 보인다.""")
 
     print("\n" + "=" * 80)
     print("2. 그런데 이 표를 만든 '표본' 이 몇 개인가")
     print("=" * 80)
     ev = [e for e in pd.unique(meta.event) if e]
     print(f"\n  평가 구간 행 수      {len(y):,}")
-    print(f"  그중 고장 라벨 행    {int(y.sum()):,}  ({y.mean()*100:.2f}%)")
+    print(f"  그중 고장 라벨 행    {int(y.sum()):,}  ({y.mean() * 100:.2f}%)")
     print(f"  ★ 독립 고장 사건     {len(ev)}건  {ev}")
     for e in ev:
         m = meta.event == e
-        h = (meta.loc[m, "timestamp"].max() - meta.loc[m, "timestamp"].min()).total_seconds() / 3600
+        h = (
+            meta.loc[m, "timestamp"].max() - meta.loc[m, "timestamp"].min()
+        ).total_seconds() / 3600
         print(f"      {e}  {int(m.sum()):>6,}행 = {h:.1f}시간 연속")
     print(f"""
   ★★ 고장 행 {int(y.sum()):,}개는 독립 표본이 아닙니다.
@@ -66,8 +74,12 @@ def main():
         out = {"모델": n}
         for e in ev:
             m = (meta.event == e).to_numpy()
-            out[f"{e} 초과율"] = (s[m] >= q).mean()
-        out["정상 구간 초과율"] = (s[(meta.event == "").to_numpy()] >= q).mean()
+            out[f"{e} 초과율"] = (
+                s[m] >= q
+            ).mean()  # 그 사건 동안 몇 %의 시간이 이상으로 찍혔나
+        out["정상 구간 초과율"] = (
+            s[(meta.event == "").to_numpy()] >= q
+        ).mean()  # 정상인데 이상으로 찍힌 비율 = 헛경보 성향
         rows.append(out)
     r2 = pd.DataFrame(rows)
     print("\n  (99분위 임계를 넘은 행의 비율)")
@@ -84,3 +96,15 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+#   모델  F3 초과율  F4 초과율  정상 구간 초과율
+#          0. 규칙: TP2 값  0.0000  0.0129     0.0104
+#     1. PCA 재구성오차(8차원)  0.0114  0.3681     0.0090
+# 2. MLP 오토인코더(32-8-32)  0.0277  0.3650     0.0086
+#   3. 지도학습 로지스틱(사건 2건)  0.3152  0.0000     0.0015
+
+# 지도학습 : F3 잡고 F4 못 잡음
+# 오토인코더 : F4 잡고 F3 거의 못 잡음
+# 지도학습은 본 고장(F1, F2)과 닮은 것만 반응 -> 조용하지만 새로운 양상(F4) 놓침
+# 오토인코더는 평소와 다르면 다 반응 -> 시끄럽지만 새로운 것도 잡음

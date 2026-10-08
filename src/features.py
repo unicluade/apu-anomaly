@@ -7,6 +7,7 @@
 rolling 은 기본이 과거 방향이라 그대로 쓰면 되지만,
 center=True 를 쓰면 미래가 섞인다. 절대 쓰지 않는다.
 """
+
 from pathlib import Path
 
 import numpy as np
@@ -16,10 +17,25 @@ SRC = Path("data/processed/labeled.parquet")
 OUT = Path("data/processed/features.parquet")
 
 # 아날로그 센서 7종. 디지털 신호는 0/1 이라 이동통계가 의미가 약하다.
-ANALOG = ["TP2", "TP3", "H1", "DV_pressure", "Reservoirs",
-          "Oil_temperature", "Motor_current"]
-DIGITAL = ["COMP", "DV_eletric", "Towers", "MPG", "LPS",
-           "Pressure_switch", "Oil_level", "Caudal_impulses"]
+ANALOG = [
+    "TP2",
+    "TP3",
+    "H1",
+    "DV_pressure",
+    "Reservoirs",
+    "Oil_temperature",
+    "Motor_current",
+]
+DIGITAL = [
+    "COMP",
+    "DV_eletric",
+    "Towers",
+    "MPG",
+    "LPS",
+    "Pressure_switch",
+    "Oil_level",
+    "Caudal_impulses",
+]
 
 # 10초 간격이므로 창 길이를 '행 수' 로 환산한다.
 WINDOWS = {"10m": 60, "1h": 360, "6h": 2160}
@@ -29,8 +45,9 @@ def build() -> pd.DataFrame:
     df = pd.read_parquet(SRC).sort_values("timestamp").reset_index(drop=True)
     print(f"[피처] {len(df):,} 행 · 10초 간격")
 
-    f = pd.DataFrame({"timestamp": df.timestamp, "event": df.event,
-                      "is_fail": df.is_fail})
+    f = pd.DataFrame(
+        {"timestamp": df.timestamp, "event": df.event, "is_fail": df.is_fail}
+    )
 
     # 현재 값
     for c in ANALOG + DIGITAL:
@@ -47,7 +64,9 @@ def build() -> pd.DataFrame:
     # ★ 개인 기준 상대값 — '지금 값이 최근 평소 대비 얼마나 벗어났나'
     for c in ANALOG:
         m, s = f[f"{c}_mean_6h"], f[f"{c}_std_6h"]
-        f[f"{c}_z"] = ((f[c] - m) / s.replace(0, np.nan)).clip(-10, 10).astype("float32")
+        f[f"{c}_z"] = (
+            ((f[c] - m) / s.replace(0, np.nan)).clip(-10, 10).astype("float32")
+        )
     print("  · 6시간 기준 z-score")
 
     # 디지털 신호의 최근 점유율 — 밸브가 최근에 얼마나 켜져 있었나
@@ -56,7 +75,7 @@ def build() -> pd.DataFrame:
 
     # 창을 채우지 못한 앞부분은 버린다(6시간 = 2,160행)
     before = len(f)
-    f = f.iloc[WINDOWS["6h"]:].reset_index(drop=True)
+    f = f.iloc[WINDOWS["6h"] :].reset_index(drop=True)
     f = f.dropna()
     print(f"  · 창 미충족 앞부분 제거: {before:,} → {len(f):,} 행")
 
