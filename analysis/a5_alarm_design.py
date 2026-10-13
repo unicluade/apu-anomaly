@@ -1,4 +1,5 @@
 """★★ 경보 설계 — 모델보다 경보 규칙이 오경보를 정한다."""
+
 import json
 import sys
 from pathlib import Path
@@ -25,8 +26,13 @@ def main():
         thr = np.quantile(s, 1 - pct)
         a = s >= thr
         gr = group_alarms(a, gap=WIN_1H)
-        rows.append({"임계(상위)": f"{pct:.1%}", "경보 횟수": len(gr),
-                     "하루 평균": round(len(gr) / days, 1)})
+        rows.append(
+            {
+                "임계(상위)": f"{pct:.1%}",
+                "경보 횟수": len(gr),
+                "하루 평균": round(len(gr) / days, 1),
+            }
+        )
     print("\n" + pd.DataFrame(rows).to_string(index=False))
     print("""
   상위 1% 임계만 써도 하루에 여러 번 울립니다. 운영팀은 사흘이면 무시하기 시작합니다.
@@ -40,11 +46,19 @@ def main():
         for persist in (0.2, 0.5, 0.8):
             a = alarms(s, pct, persist)
             rep = event_report(ts, ev, a)
-            det = {e: (f"{d['lead_h']:+.1f}h" if d["detected"] else "미탐")
-                   for e, d in rep["events"].items()}
-            rows.append({"임계": f"{pct:.1%}", "지속 요구": f"{persist:.0%}",
-                         **det, "오경보": rep["false_alarms"],
-                         "주당": round(rep["fa_per_week"], 2)})
+            det = {
+                e: (f"{d['lead_h']:+.1f}h" if d["detected"] else "미탐")
+                for e, d in rep["events"].items()
+            }
+            rows.append(
+                {
+                    "임계": f"{pct:.1%}",
+                    "지속 요구": f"{persist:.0%}",
+                    **det,
+                    "오경보": rep["false_alarms"],
+                    "주당": round(rep["fa_per_week"], 2),
+                }
+            )
     r = pd.DataFrame(rows)
     print("\n" + r.to_string(index=False))
     print("""
@@ -73,3 +87,10 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# F4를 35시간 앞서 탐지한 설정은 모두 주당 오경보가 1회 이상인 설정이었고,
+# 오경보 빈도로 계산한 우연 일치 확률이 25~84%였다. 따라서 이를 예지로 해석하지 않았다.
+#
+# F3: 어떤 설정도 미리 못 잡음 (전부 −34h, 고장 한복판)
+# F4: 진짜로는 고장 3시간 뒤 잡음. +35h는 신뢰 어려움
+# → 오토인코더는 예지 0건으로 보는 게 정직함

@@ -4,6 +4,7 @@
 고장·정비·가동정지·센서교체가 전부 섞여서 나온다.
 그중 무엇이 고장인지는 모델이 모른다. 우리도 문서를 봐야 안다.
 """
+
 import json
 import sys
 from pathlib import Path
@@ -29,7 +30,7 @@ KNOWN = {
 def main():
     meta = pd.read_parquet("data/processed/test_meta.parquet")
     names = json.load(open("reports/train_meta.json"))["names"]
-    s = np.load("data/processed/score_2.npy")      # MLP 오토인코더
+    s = np.load("data/processed/score_2.npy")  # MLP 오토인코더
     g = daily_rank(meta.timestamp.to_numpy(), s, pct=0.01)
 
     print("=" * 78)
@@ -38,7 +39,9 @@ def main():
     print()
     for day, row in g.sort_values("over_rate", ascending=False).head(10).iterrows():
         tag = KNOWN.get(str(day.date()), "")
-        print(f"  {row['rank']:>2}위  {day.date()}  초과율 {row['over_rate']*100:5.1f}%   {tag}")
+        print(
+            f"  {int(row['rank']):>2}위  {day.date()}  초과율 {row['over_rate'] * 100:5.1f}%   {tag}"
+        )
 
     print("\n" + "=" * 78)
     print("문서에 적힌 날들의 순위")
@@ -47,16 +50,25 @@ def main():
     for day, tag in KNOWN.items():
         d = pd.Timestamp(day)
         if d in g.index:
-            print(f"  {day}  {g.loc[d,'rank']:>2}위 / {len(g)}일   {tag}")
+            print(f"  {day}  {g.loc[d, 'rank']:>2}위 / {len(g)}일   {tag}")
 
     r1 = g.loc[pd.Timestamp("2020-06-08"), "rank"]
-    f3 = [int(g.loc[pd.Timestamp(d), "rank"]) for d in
-          ("2020-06-05", "2020-06-06", "2020-06-07")]
-    print(f"""
+    f3 = [
+        int(g.loc[pd.Timestamp(d), "rank"])
+        for d in ("2020-06-05", "2020-06-06", "2020-06-07")
+    ]
+    print(
+        f"""
   ★★ 1위가 {r1}위인 2020-06-08 — 이 날은 <고장이 아니라 정비>입니다.
      문서의 Report 열에 "Maintenance on 8Jun at 16:00" 이라고 적혀 있습니다.
 
      정작 고장 F3(6/5~6/7)은 91일 중 {f3[0]}위 · {f3[1]}위 · {f3[2]}위로 묻혔습니다.
+     # F3이 왜 묻혔을까??
+      -> F4(4.5시간): 짧아서 6시간 창 안에 정상 시간이 많이 섞여 있음 
+                     → 고장 값이 계속 튀어 보임 → 잡힘
+         F3(52시간): 고장 6시간쯤 지나면 6시간 평균 자체가 고장 상태 값이 됨
+                     → 고장이 "새로운 평소"가 돼서 z가 0 근처로 → 안 튀어 보임
+     # 즉 피처 설계가 긴 고장에 적응해버려서 못 잡았을 가능성이 큼 !
 
   왜 이런 일이 생기나.
     정비는 '평소와 다른 상태' 입니다. 압축기를 세우고, 부품을 갈고, 밸브를 여닫습니다.
@@ -68,7 +80,10 @@ def main():
       <시스템이 알고 있어야> 걸러낼 수 있습니다.
     · '이상 점수 상위 목록' 을 만들고 <사람이 분류하는> 단계가 필요합니다.
       그 분류가 쌓이면 그게 곧 라벨이 되고, 지도학습으로 넘어갈 수 있습니다.
-    · 라벨 없는 상태에서 바로 자동 차단·자동 정비지시로 가면 안 됩니다.""".replace("<","").replace(">",""))
+    · 라벨 없는 상태에서 바로 자동 차단·자동 정비지시로 가면 안 됩니다.""".replace(
+            "<", ""
+        ).replace(">", "")
+    )
 
     Path("reports").mkdir(exist_ok=True)
     g.to_csv("reports/a4_daily_rank.csv")
